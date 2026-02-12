@@ -1,9 +1,41 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
 const API_URL = 'http://localhost:8080/api/notes'
 
+// Компонент модального окна
+function Modal({ isOpen, onClose, onConfirm, title, message, type = 'alert' }) {
+  if (!isOpen) return null
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{title}</h3>
+          <button className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-body">
+          <p>{message}</p>
+        </div>
+        <div className="modal-footer">
+          {type === 'confirm' ? (
+            <>
+              <button className="btn-secondary" onClick={onClose}>Отмена</button>
+              <button className="btn-delete" onClick={onConfirm}>Удалить</button>
+            </>
+          ) : (
+            <button className="btn-primary" onClick={onClose}>OK</button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function App() {
+  // Ref для формы (для скролла при редактировании)
+  const formRef = useRef(null)
+
   // Состояние приложения
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -12,6 +44,15 @@ function App() {
   // Состояние формы
   const [isEditing, setIsEditing] = useState(false)
   const [currentNote, setCurrentNote] = useState({ id: null, title: '', content: '' })
+
+  // Состояние модального окна
+  const [modal, setModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'alert',
+    onConfirm: null
+  })
 
   // Загрузка заметок при монтировании компонента
   useEffect(() => {
@@ -74,26 +115,37 @@ function App() {
 
   // Удалить заметку
   const deleteNote = async (id) => {
-    if (!window.confirm('Удалить заметку?')) return
-
-    try {
-      const response = await fetch(`${API_URL}/${id}`, {
-        method: 'DELETE'
-      })
-      const data = await response.json()
-      if (data.success) {
-        setNotes(notes.filter(n => n.id !== id))
+    setModal({
+      isOpen: true,
+      title: 'Подтверждение удаления',
+      message: 'Вы уверены, что хотите удалить эту заметку? Это действие нельзя отменить.',
+      type: 'confirm',
+      onConfirm: async () => {
+        setModal({ ...modal, isOpen: false })
+        try {
+          const response = await fetch(`${API_URL}/${id}`, {
+            method: 'DELETE'
+          })
+          const data = await response.json()
+          if (data.success) {
+            setNotes(notes.filter(n => n.id !== id))
+          }
+        } catch (err) {
+          setError('Ошибка удаления заметки')
+          console.error(err)
+        }
       }
-    } catch (err) {
-      setError('Ошибка удаления заметки')
-      console.error(err)
-    }
+    })
   }
 
   // Начать редактирование
   const startEdit = (note) => {
     setIsEditing(true)
     setCurrentNote(note)
+    // Скроллим к форме плавно
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
   }
 
   // Сбросить форму
@@ -106,7 +158,13 @@ function App() {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!currentNote.title || !currentNote.content) {
-      alert('Заполните все поля')
+      setModal({
+        isOpen: true,
+        title: 'Ошибка валидации',
+        message: 'Пожалуйста, заполните все поля: заголовок и содержимое заметки.',
+        type: 'alert',
+        onConfirm: null
+      })
       return
     }
 
@@ -129,7 +187,7 @@ function App() {
       {error && <div className="error">{error}</div>}
 
       {/* Форма создания/редактирования */}
-      <div className="form-container">
+      <div className="form-container" ref={formRef}>
         <h2>{isEditing ? 'Редактировать заметку' : 'Создать новую заметку'}</h2>
         <form onSubmit={handleSubmit}>
           <input
@@ -183,6 +241,16 @@ function App() {
           ))
         )}
       </div>
+
+      {/* Модальное окно */}
+      <Modal
+        isOpen={modal.isOpen}
+        onClose={() => setModal({ ...modal, isOpen: false })}
+        onConfirm={modal.onConfirm}
+        title={modal.title}
+        message={modal.message}
+        type={modal.type}
+      />
     </div>
   )
 }
