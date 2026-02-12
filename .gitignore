@@ -1,0 +1,16 @@
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+.claude/
+
+.DS_Store
+Thumbs.db
+
+*.log
+
+*.sql
+*.sqlite
